@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Creator {
+  id                    String   @id @default(uuid())
+  email                 String?
+  passwordHash          String?  @map("password_hash")
+  username              String
+  platform              String   // 'tiktok', 'instagram', 'youtube'
+  followerCount         Int      @map("follower_count")
+  engagementRate        Float?   @map("engagement_rate")
+  avgViews              Int?     @map("avg_views")
+  contentCategories     String[] @map("content_categories")
+  audienceDemographics  Json?    @map("audience_demographics")
+  contentKeywords       String[] @map("content_keywords")
+  lastAnalysisDate      DateTime? @map("last_analysis_date")
+  verificationStatus    String   @default("pending") @map("verification_status")
+  annualEarnings        Float    @default(0) @map("annual_earnings")
+  currentFeeTier        String   @default("launch") @map("current_fee_tier")
+  stripeAccountId       String?  @map("stripe_account_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  // Creator settings
+  minimumDealAmount     Float    @default(1000) @map("minimum_deal_amount")
+  profileCompletion     Int      @default(0) @map("profile_completion")
+
+  // Claim flow
+  claimToken            String?  @map("claim_token")
+  claimTokenExpiry      DateTime? @map("claim_token_expiry")
+
+  // Algorithm metrics (cached, refreshed periodically)
+  relevanceKeywords     String[] @map("relevance_keywords")
+  organicERMedian       Float?   @map("organic_er_median")
+  adERMedian            Float?   @map("ad_er_median")
+  adDeltaRatio          Float?   @map("ad_delta_ratio")
+  postingFrequency      Float?   @map("posting_frequency")
+  nicheStabilityScore   Float?   @map("niche_stability_score")
+  brandSafetyScore      Float?   @map("brand_safety_score")
+  followerGrowthRate90d Float?   @map("follower_growth_rate_90d")
+  erTrend30d            Float?   @map("er_trend_30d")
+  lastMetricsUpdate     DateTime? @map("last_metrics_update")
+
+  deals   Deal[]
+  content CreatorContent[]
+
+  @@map("creators")
+}
+
+model BrandManager {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  firstName    String?  @map("first_name")
+  lastName     String?  @map("last_name")
+  companyName  String?  @map("company_name")
+  role         String?
+  industry     String?
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  deals         Deal[]
+  searchQueries SearchQuery[]
+
+  @@map("brand_managers")
+}
+
+model Deal {
+  id                   String    @id @default(uuid())
+  creatorId            String    @map("creator_id")
+  brandManagerId       String    @map("brand_manager_id")
+  dealAmount           Float     @map("deal_amount")
+  platformFee          Float?    @map("platform_fee")
+  platformFeeAmount    Float?    @map("platform_fee_amount")
+  dealDescription      String?   @map("deal_description")
+  deliverables         String[]
+  dueDate              DateTime? @map("due_date")
+  status               String    @default("pending") // 'pending', 'accepted', 'in_progress', 'completed', 'paid'
+  contractUrl          String?   @map("contract_url")
+  stripePaymentIntentId String?  @map("stripe_payment_intent_id")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  completedAt          DateTime? @map("completed_at")
+
+  // Structured contract options
+  usageRights          String?   @map("usage_rights") // 'single_use', '30_days', '90_days', '1_year', 'perpetual'
+  exclusivity          String?   @map("exclusivity") // 'none', '30_days', '60_days', '90_days'
+  brandApproval        Boolean   @default(true) @map("brand_approval")
+  revisionRounds       Int       @default(2) @map("revision_rounds")
+  deliveryWindow       String?   @map("delivery_window") // '7_days', '14_days', '30_days', 'custom'
+  customDeliveryDays   Int?      @map("custom_delivery_days")
+  briefText            String?   @map("brief_text")
+
+  creator       Creator      @relation(fields: [creatorId], references: [id])
+  brandManager  BrandManager @relation(fields: [brandManagerId], references: [id])
+  contract      Contract?
+
+  @@map("deals")
+}
+
+model SearchQuery {
+  id              String   @id @default(uuid())
+  brandManagerId  String   @map("brand_manager_id")
+  queryText       String   @map("query_text")
+  parsedIntent    Json?    @map("parsed_intent")
+  resultsCount    Int?     @map("results_count")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  brandManager BrandManager @relation(fields: [brandManagerId], references: [id])
+
+  @@map("search_queries")
+}
+
+model CreatorContent {
+  id           String   @id @default(uuid())
+  creatorId    String   @map("creator_id")
+  postUrl      String?  @map("post_url")
+  contentType  String?  @map("content_type") // 'video', 'image', 'story'
+  captionText  String?  @map("caption_text")
+  hashtags     String[]
+  viewCount    Int?     @map("view_count")
+  likeCount    Int?     @map("like_count")
+  commentCount Int?     @map("comment_count")
+  shareCount   Int?     @map("share_count")
+  postedAt     DateTime? @map("posted_at")
+  analyzedAt   DateTime @default(now()) @map("analyzed_at")
+
+  creator Creator @relation(fields: [creatorId], references: [id])
+
+  @@map("creator_content")
+}
+
+model Contract {
+  id                   String   @id @default(uuid())
+  dealId               String   @unique @map("deal_id")
+  cgaRiderVersion      String?  @map("cga_rider_version")
+  usageRights          String?  @map("usage_rights")
+  exclusivityPeriod    Int?     @map("exclusivity_period")
+  contentDeliverables  String[] @map("content_deliverables")
+  paymentTerms         String?  @map("payment_terms")
+  contractPdfUrl       String?  @map("contract_pdf_url")
+  status               String   @default("draft")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  deal Deal @relation(fields: [dealId], references: [id])
+
+  @@map("contracts")
+}
+
+model Admin {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String?
+  role         String   @default("admin") // 'admin', 'super_admin'
+  createdAt    DateTime @default(now()) @map("created_at")
+  lastLoginAt  DateTime? @map("last_login_at")
+
+  @@map("admins")
+}
