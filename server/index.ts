@@ -54,7 +54,8 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     // Production: Serve static files
-    const clientPath = path.join(__dirname, '../dist/client');
+    // When running from dist/server/index.js, go up to dist/ then into client/
+    const clientPath = path.join(__dirname, '../client');
     app.use(express.static(clientPath));
     app.get('*', (req, res) => {
       if (!req.path.startsWith('/api')) {
