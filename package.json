@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch server/index.ts",
-    "build": "npm run db:generate && vite build",
+    "build": "npm run db:generate && tsc -p tsconfig.server.json && vite build",
     "start": "NODE_ENV=production node dist/server/index.js",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",

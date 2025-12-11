@@ -5,10 +5,10 @@ entrypoint = "server/index.ts"
 channel = "stable-24_05"
 
 [deployment]
-run = ["sh", "-c", "npm run start"]
-deploymentTarget = "cloudrun"
 build = ["sh", "-c", "npm run build"]
+run = ["sh", "-c", "NODE_ENV=production node dist/server/index.js"]
+deploymentTarget = "autoscale"
 
 [[ports]]
-localPort = 3002
+localPort = 5000
 externalPort = 80
