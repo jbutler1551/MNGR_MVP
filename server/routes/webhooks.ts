@@ -8,6 +8,12 @@ const router = Router();
 // Stripe webhook handler
 // Note: This route needs raw body, configured in server/index.ts
 router.post('/stripe', async (req: Request, res: Response) => {
+  // If Stripe not configured, just acknowledge the webhook
+  if (!stripe) {
+    console.log('Stripe webhook received but Stripe not configured');
+    return res.json({ received: true, configured: false });
+  }
+
   const sig = req.headers['stripe-signature'];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 

@@ -5,7 +5,19 @@ import jwt from 'jsonwebtoken';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3002';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5000';
+
+// Helper to check if Stripe is configured
+const requireStripe = (res: Response): boolean => {
+  if (!stripe) {
+    res.status(503).json({
+      message: 'Payment features are not available. Stripe is not configured.',
+      stripeConfigured: false
+    });
+    return false;
+  }
+  return true;
+};
 
 // Auth middleware
 interface AuthRequest extends Request {
@@ -32,6 +44,8 @@ const authMiddleware = (req: AuthRequest, res: Response, next: Function) => {
 // Create Stripe Connect account for creator
 router.post('/connect/create', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    if (!requireStripe(res)) return;
+
     if (req.user?.type !== 'creator') {
       return res.status(403).json({ message: 'Only creators can connect Stripe accounts' });
     }
@@ -53,7 +67,7 @@ router.post('/connect/create', authMiddleware, async (req: AuthRequest, res: Res
     }
 
     // Create Stripe Connect Express account
-    const account = await stripe.accounts.create({
+    const account = await stripe!.accounts.create({
       type: 'express',
       country: 'US',
       email: creator.email || undefined,
@@ -87,6 +101,8 @@ router.post('/connect/create', authMiddleware, async (req: AuthRequest, res: Res
 // Get Stripe Connect onboarding link
 router.post('/connect/onboarding', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    if (!requireStripe(res)) return;
+
     if (req.user?.type !== 'creator') {
       return res.status(403).json({ message: 'Only creators can access Stripe onboarding' });
     }
@@ -103,7 +119,7 @@ router.post('/connect/onboarding', authMiddleware, async (req: AuthRequest, res:
 
     // Create account if doesn't exist
     if (!accountId) {
-      const account = await stripe.accounts.create({
+      const account = await stripe!.accounts.create({
         type: 'express',
         country: 'US',
         email: creator.email || undefined,
@@ -127,7 +143,7 @@ router.post('/connect/onboarding', authMiddleware, async (req: AuthRequest, res:
     }
 
     // Create account link for onboarding
-    const accountLink = await stripe.accountLinks.create({
+    const accountLink = await stripe!.accountLinks.create({
       account: accountId,
       refresh_url: `${FRONTEND_URL}/creator/settings?stripe=refresh`,
       return_url: `${FRONTEND_URL}/creator/settings?stripe=success`,
@@ -144,6 +160,8 @@ router.post('/connect/onboarding', authMiddleware, async (req: AuthRequest, res:
 // Get Stripe Connect dashboard link (for existing connected accounts)
 router.get('/connect/dashboard', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    if (!requireStripe(res)) return;
+
     if (req.user?.type !== 'creator') {
       return res.status(403).json({ message: 'Only creators can access Stripe dashboard' });
     }
@@ -156,7 +174,7 @@ router.get('/connect/dashboard', authMiddleware, async (req: AuthRequest, res: R
       return res.status(400).json({ message: 'No Stripe account connected' });
     }
 
-    const loginLink = await stripe.accounts.createLoginLink(creator.stripeAccountId);
+    const loginLink = await stripe!.accounts.createLoginLink(creator.stripeAccountId);
 
     return res.json({ url: loginLink.url });
   } catch (error: any) {
@@ -172,6 +190,16 @@ router.get('/connect/status', authMiddleware, async (req: AuthRequest, res: Resp
       return res.status(403).json({ message: 'Only creators can check Stripe status' });
     }
 
+    // If Stripe not configured, return not_connected status
+    if (!stripe) {
+      return res.json({
+        connected: false,
+        status: 'not_connected',
+        message: 'Payment system not configured yet',
+        stripeConfigured: false
+      });
+    }
+
     const creator = await prisma.creator.findUnique({
       where: { id: req.user.userId },
     });
@@ -184,7 +212,7 @@ router.get('/connect/status', authMiddleware, async (req: AuthRequest, res: Resp
       });
     }
 
-    const account = await stripe.accounts.retrieve(creator.stripeAccountId);
+    const account = await stripe!.accounts.retrieve(creator.stripeAccountId);
 
     return res.json({
       connected: true,
@@ -205,6 +233,8 @@ router.get('/connect/status', authMiddleware, async (req: AuthRequest, res: Resp
 // Create payment intent for a deal
 router.post('/intent/create', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    if (!requireStripe(res)) return;
+
     if (req.user?.type !== 'brand') {
       return res.status(403).json({ message: 'Only brands can create payment intents' });
     }
@@ -237,7 +267,7 @@ router.post('/intent/create', authMiddleware, async (req: AuthRequest, res: Resp
 
     if (deal.stripePaymentIntentId) {
       // Return existing payment intent
-      const existingIntent = await stripe.paymentIntents.retrieve(deal.stripePaymentIntentId);
+      const existingIntent = await stripe!.paymentIntents.retrieve(deal.stripePaymentIntentId);
       return res.json({
         clientSecret: existingIntent.client_secret,
         paymentIntentId: existingIntent.id,
@@ -259,7 +289,7 @@ router.post('/intent/create', authMiddleware, async (req: AuthRequest, res: Resp
     const platformFeeInCents = Math.round((deal.platformFeeAmount || 0) * 100);
 
     // Create payment intent with application fee for platform
-    const paymentIntent = await stripe.paymentIntents.create({
+    const paymentIntent = await stripe!.paymentIntents.create({
       amount: amountInCents,
       currency: 'usd',
       automatic_payment_methods: {
@@ -302,6 +332,8 @@ router.post('/intent/create', authMiddleware, async (req: AuthRequest, res: Resp
 // Get payment status for a deal
 router.get('/status/:dealId', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
+    if (!requireStripe(res)) return;
+
     const { dealId } = req.params;
 
     const deal = await prisma.deal.findUnique({
@@ -325,7 +357,7 @@ router.get('/status/:dealId', authMiddleware, async (req: AuthRequest, res: Resp
       });
     }
 
-    const paymentIntent = await stripe.paymentIntents.retrieve(deal.stripePaymentIntentId);
+    const paymentIntent = await stripe!.paymentIntents.retrieve(deal.stripePaymentIntentId);
 
     return res.json({
       status: paymentIntent.status,

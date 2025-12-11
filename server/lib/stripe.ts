@@ -1,13 +1,16 @@
 import Stripe from 'stripe';
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  console.warn('Warning: STRIPE_SECRET_KEY not set. Payment features will not work.');
-}
+// Stripe is optional - app runs without it, payment features disabled
+export const stripe: Stripe | null = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2025-11-17.clover',
+      typescript: true,
+    })
+  : null;
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-11-17.clover',
-  typescript: true,
-});
+if (!stripe) {
+  console.warn('Warning: STRIPE_SECRET_KEY not set. Payment features will be disabled.');
+}
 
 // Platform fee percentages by tier
 export const PLATFORM_FEES: Record<string, number> = {
